@@ -4,6 +4,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.User;
@@ -48,16 +49,15 @@ public class SecurityConfig {
             // Stateless HTTP Basic auth: credentials are sent per request, so a
             // session-based CSRF token is not applicable. CSRF is disabled to
             // keep this security fix minimal without breaking the JSON upload API.
-            .csrf().disable()
-            .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS)
-            .and()
-            .authorizeRequests()
+            .csrf(csrf -> csrf.disable())
+            .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .authorizeHttpRequests(authz -> authz
                 // Default deny for state-changing operations (CWE-862 / CWE-306).
-                .antMatchers(HttpMethod.POST, "/upload", "/detail/*/delete").authenticated()
+                .requestMatchers(HttpMethod.POST, "/upload", "/detail/*/delete").authenticated()
                 // Public, read-only photo gallery.
                 .anyRequest().permitAll()
-            .and()
-            .httpBasic();
+            )
+            .httpBasic(Customizer.withDefaults());
         return http.build();
     }
 }

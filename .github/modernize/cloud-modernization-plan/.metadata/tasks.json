@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Tasks template for the PhotoAlbum-Java cloud modernization plan.",
+  "tasks": [
+    {
+      "type": "setupBaseline",
+      "id": "001-setup-baseline",
+      "description": "Capture the current application behavior as a frozen modernization baseline.",
+      "reason": "Integration verification must compare the migrated application with its pre-migration behavior.",
+      "requirements": "Snapshot the application's main source directory src and capture test cases and test data for photo upload, gallery display, photo retrieval, navigation, deletion, validation, and authentication. Record the real/mock strategy for every external dependency in the baseline decision table.",
+      "dependencies": [],
+      "snapshotFolder": "src",
+      "successCriteria": {
+        "passBuild": "true",
+        "passUnitTests": "true"
+      }
+    },
+    {
+      "type": "transform",
+      "id": "002-transform-oracle-to-postgresql",
+      "description": "Migrate the application's persistence from Oracle Database to Azure Database for PostgreSQL.",
+      "reason": "Oracle is not the target managed database platform for the Azure deployment.",
+      "requirements": "Addresses the existing Oracle Database persistence and Oracle-specific repository queries. Preserve the Photo entity, BLOB photo storage, metadata, ordering, navigation, pagination, statistics, and CRUD behavior. Replace Oracle-specific database configuration and SQL with PostgreSQL-compatible behavior and configure the application for Azure Database for PostgreSQL. Prefer managed identity for Azure database authentication and do not introduce plaintext production credentials.",
+      "dependencies": [],
+      "skills": [
+        {
+          "name": "migration-oracle-to-postgresql",
+          "location": "builtin"
+        }
+      ],
+      "successCriteria": {
+        "passBuild": "true",
+        "passUnitTests": "true"
+      }
+    },
+    {
+      "type": "transform",
+      "id": "003-transform-cloud-readiness",
+      "description": "Prepare the upgraded Spring Boot application for reliable stateless cloud operation.",
+      "reason": "The repository's container configuration still targets the former Java 8 runtime and local Oracle deployment model.",
+      "requirements": "Align runtime and build configuration with the already-upgraded Java 25 and Spring Boot 4.0 application. Remove assumptions about Docker Compose and local Oracle services, keep all runtime settings externalized, ensure the container process is suitable for Azure Container Apps, and preserve the existing web behavior and database-backed photo storage.",
+      "dependencies": [
+        "002-transform-oracle-to-postgresql"
+      ],
+      "successCriteria": {
+        "passBuild": "true",
+        "passUnitTests": "true"
+      }
+    },
+    {
+      "type": "infrastructure",
+      "id": "004-infrastructure-bicep",
+      "description": "Generate and provision Azure infrastructure for the application and its PostgreSQL data store.",
+      "reason": "The application needs repeatable Azure resources before it can be deployed and integration-tested.",
+      "requirements": "Create validated Bicep infrastructure for Azure Container Apps, its supporting Container Apps environment and registry, Azure Database for PostgreSQL, managed identities and required role assignments, networking, monitoring, and Key Vault for secrets that require vault storage. Use secure defaults and least privilege. Resource names, subscription IDs, connection strings, and other environment-specific values must be supplied through deployment configuration rather than committed to the task plan.",
+      "dependencies": [],
+      "iacType": "bicep",
+      "provision": true,
+      "skills": [
+        {
+          "name": "infrastructure-bicep-generation",
+          "location": "builtin"
+        }
+      ]
+    },
+    {
+      "type": "integrationTest",
+      "id": "005-integrationTest",
+      "description": "Build integration tests for migrated Azure services and run post-migration verification",
+      "reason": "The migration must verify behavior against the provisioned Azure services before deployment.",
+      "requirements": "Use the frozen baseline specification and infra-decision table. Run post-migration verification against the provisioned Azure Database for PostgreSQL and the application service, covering upload, image retrieval, gallery ordering, navigation, deletion, validation, authentication, and database connectivity. Do not store resource IDs, subscription IDs, or connection strings in this task plan.",
+      "dependencies": [
+        "001-setup-baseline",
+        "002-transform-oracle-to-postgresql",
+        "003-transform-cloud-readiness",
+        "004-infrastructure-bicep"
+      ]
+    },
+    {
+      "type": "security",
+      "id": "006-security-cve-remediation",
+      "description": "Scan all project dependencies for known CVEs and remediate identified vulnerabilities before deployment.",
+      "reason": "The deployed application must not carry known dependency vulnerabilities.",
+      "requirements": "Upgrade vulnerable dependencies to the minimum patched version. If a fix requires a major version upgrade, document the dependency, current and target major versions, and breaking-change risk. Verify the project builds and all tests pass after remediation.",
+      "dependencies": [
+        "003-transform-cloud-readiness",
+        "005-integrationTest"
+      ],
+      "successCriteria": {
+        "passBuild": "true",
+        "passUnitTests": "true"
+      }
+    },
+    {
+      "type": "deployment",
+      "id": "007-deployment-container-app",
+      "description": "Build, provision, and deploy the PhotoAlbum-Java application to Azure Container Apps.",
+      "reason": "Deployment to Azure is an explicit modernization objective.",
+      "requirements": "Build the production container from the upgraded application, publish it to the provisioned registry, configure the Container App with externalized PostgreSQL and application settings, enable managed identity access to Azure resources, and deploy the application with the required ingress and health behavior. Validate the deployed endpoint and verify that no secrets are embedded in the image or repository.",
+      "dependencies": [
+        "004-infrastructure-bicep",
+        "006-security-cve-remediation"
+      ],
+      "targetAzureService": "azurecontainerapp",
+      "resourceStatus": "create new service",
+      "deploymentTool": "bicep",
+      "skills": [
+        {
+          "name": "azcli-containerapp-deploy",
+          "location": "builtin"
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "planName": "cloud-modernization-plan",
+    "projectName": "PhotoAlbum-Java",
+    "language": "java",
+    "createdAt": "2026-09-03T13:18:47Z",
+    "version": "1.0"
+  }
+}
